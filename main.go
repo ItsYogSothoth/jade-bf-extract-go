@@ -47,9 +47,9 @@ func ProcessCommandline(args []string) {
 			mode = "print-info"
 		default:
 			if(args[i][0:2] != "--") {
-				bfPath = args[i]
-				if (i + 1) != len(args) {
-					i++
+				if bfPath == "" {
+					bfPath = args[i]
+				} else {
 					extractPath = args[i]
 				}
 			}
