@@ -169,8 +169,9 @@ Dir metadata table offset: %x
 }
 
 func (bf *BigFile) PrintOffsetArray() {
+	fmt.Printf("index,file_data_offset,resouce_key,filename\n")
 	for i := range len(bf.OffsetArray) {
-		fmt.Printf("%d,%x,%x\n", i, bf.OffsetArray[i].FileDataOffset, bf.OffsetArray[i].ResourceKey)
+		fmt.Printf("%d,%x,%x,%s\n", i, bf.OffsetArray[i].FileDataOffset, bf.OffsetArray[i].ResourceKey, bf.Files[i].Metadata.Filename)
 	}
 }
 
