@@ -16,7 +16,7 @@ type BigFile struct {
 	FileCount               int
 	DirCount                int
 	OffsetTableLength       int
-	InitialKey              []byte
+	InitialKey              int
 	OffsetTableOffset       int
 	FileMetadataTableOffset int
 	DirMetadataTableOffset  int
@@ -51,7 +51,9 @@ func (bf *BigFile) ProcessHeader() {
 
 	f.Seek(4, io.SeekCurrent)
 
-	f.Read(bf.InitialKey)
+	initialKeyBytes := make([]byte, 4)
+	f.Read(initialKeyBytes)
+	bf.InitialKey = int(binary.LittleEndian.Uint32(initialKeyBytes))
 
 	f.Seek(8, io.SeekCurrent)
 
@@ -144,6 +146,81 @@ func (bf *BigFile) ExtractDir(idx int, target string, incEmpty bool) {
 	bf.Dirs[idx].ExtractDir(target, bf.Path, incEmpty)
 }
 
+func (bf *BigFile) GetFile(key int) (file *File, found bool) {
+	for i := range bf.Files {
+		if bf.Files[i].ResourceKey == key {
+			file = &bf.Files[i]
+			found = true
+			return
+		}
+	}
+
+	found = false
+	return
+}
+
+func (bf *BigFile) InitialWalk() {
+	file, found := bf.GetFile(bf.InitialKey)
+	if found {
+		initKeyLinks := make([]*File, 0)
+		f, err := os.Open(bf.Path)
+		if err != nil {
+			panic(err)
+		}
+		f.Seek(int64(file.DataOffset + 4), io.SeekStart)
+		for range(file.Metadata.Size / 4) {
+			readBytes := make([]byte, 4)
+			f.Read(readBytes)
+			readKey := int(binary.LittleEndian.Uint32(readBytes))
+			if readKey > 0 {
+				newFile, _ := bf.GetFile(readKey)
+				initKeyLinks = append(initKeyLinks, newFile)
+			}
+		}
+		f.Close()
+		for i := range len(initKeyLinks) {
+			nameLen := len(initKeyLinks[i].Metadata.Filename) 
+			ext := initKeyLinks[i].Metadata.Filename[(nameLen - 4):nameLen]
+			fmt.Printf("%s (%x)\n", initKeyLinks[i].Metadata.Filename, initKeyLinks[i].ResourceKey)
+			switch ext {
+			case ".omd":
+				omdFiles := bf.ReadUniversOmd(initKeyLinks[i])
+				for j := range(omdFiles) {
+					fmt.Printf("  %s (%x)\n", omdFiles[j].Metadata.Filename, omdFiles[j].ResourceKey)
+				}
+			}
+		}
+	}
+}
+
+func (bf *BigFile) ReadUniversOmd(omdFile *File) []*File {
+	f, err := os.Open(bf.Path)
+	if err != nil {
+		panic(err)
+	}
+	linkedFiles := make([]*File, 0)
+	f.Seek(int64(omdFile.DataOffset + 4), io.SeekStart)
+	for range(omdFile.Metadata.Size / 8) {
+		readBytes := make([]byte, 8)
+		f.Read(readBytes)
+
+		readKey := int(binary.LittleEndian.Uint32(readBytes[0:4]))
+		ext := string(readBytes[4:8])
+
+		if readKey > 0 {
+			linkedFile, _ := bf.GetFile(readKey)
+			nameLen := len(linkedFile.Metadata.Filename) 
+			fileExt := linkedFile.Metadata.Filename[(nameLen - 4):nameLen]
+			if fileExt == ext {
+				linkedFiles = append(linkedFiles, linkedFile)
+			}
+		}
+	}
+	f.Close()
+
+	return linkedFiles
+}
+
 func (bf *BigFile) PrintInfo() {
 	fmt.Printf(
 		`BF path: %s
@@ -168,6 +245,26 @@ Dir metadata table offset: %x
 	)
 }
 
+func (bf *BigFile) GetFullFileDir(file *File) string {
+	curDir := bf.Dirs[file.Metadata.DirIndex]
+	dirs := make([]string, 0)
+	for {
+		if curDir.ParentIndex != 0xFFFFFFFF {
+			dirs = append(dirs, curDir.Dirname)
+			curDir = bf.Dirs[curDir.ParentIndex]
+		} else {
+			break
+		}
+	}
+
+	finalDir := ""
+	for i := range len(dirs) {
+		finalDir = fmt.Sprintf("/%s%s", dirs[i], finalDir)
+	}
+
+	return finalDir
+}
+
 func (bf *BigFile) PrintOffsetArray() {
 	fmt.Printf("index,file_data_offset,resouce_key,filename\n")
 	length := len(bf.Files)
@@ -184,7 +281,6 @@ func MakeBfFile(path string) *BigFile {
 	bf := BigFile{
 		Path:       path,
 		Version:    make([]byte, 4),
-		InitialKey: make([]byte, 4),
 	}
 	bf.ProcessHeader()
 	bf.PopulateOffsetArray()

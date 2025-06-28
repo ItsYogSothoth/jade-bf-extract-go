@@ -17,6 +17,7 @@ func init() {
 	flag.Usage = PrintUsage
 	offsetArrayPtr := flag.Bool("print-offset-array", false, "prints offset array with resource keys in CSV format")
 	printInfoPtr := flag.Bool("print-info", false, "prints BF file info")
+	initWalkPtr := flag.Bool("init-walk", false, "reads file from initial offset and follows its references")
 
 	flag.Parse()
 
@@ -26,6 +27,10 @@ func init() {
 
 	if *printInfoPtr {
 		mode = "print-info"
+	}
+
+	if *initWalkPtr {
+		mode = "init-walk"
 	}
 
 	args := flag.Args()
@@ -54,10 +59,12 @@ func main() {
 		bfFile.PrintOffsetArray()
 	case "print-info":
 		bfFile.PrintInfo()
+	case "init-walk":
+		bfFile.InitialWalk()
 	}
 }
 
 func PrintUsage() {
 	fmt.Printf("Usage: %s [options] <bf-file-path> <output-dir>\n", filepath.Base(os.Args[0]))
-	fmt.Printf("\nOptions:\n --print-offset-array - prints offset array with resource keys in CSV format\n --print-info - prints BF file info\n")
+	fmt.Printf("\nOptions:\n --print-offset-array - prints offset array with resource keys in CSV format\n --print-info - prints BF file info\n --init-walk - reads file from initial offset and follows its references\n")
 }
