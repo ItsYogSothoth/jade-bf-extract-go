@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,16 +13,34 @@ var mode = "extract"
 var bfPath string
 var extractPath string
 
-func main() {
-	args := os.Args[1:]
+func init() {
+	flag.Usage = PrintUsage
+	offsetArrayPtr := flag.Bool("print-offset-array", false, "prints offset array with resource keys in CSV format")
+	printInfoPtr := flag.Bool("print-info", false, "prints BF file info")
 
-	if len(args) < 2 {
+	flag.Parse()
+
+	if *offsetArrayPtr {
+		mode = "print-offset"
+	}
+
+	if *printInfoPtr {
+		mode = "print-info"
+	}
+
+	args := flag.Args()
+	if len(args) < 1 || (len(args) < 2 && mode == "extract") {
 		PrintUsage()
 		os.Exit(0)
 	}
 
-	ProcessCommandline(args)
+	bfPath = flag.Args()[0]
+	if mode == "extract" {
+		extractPath = flag.Args()[1]
+	}
+}
 
+func main() {
 	bfFile := bf.MakeBfFile(bfPath)
 
 	switch mode {
@@ -35,25 +54,6 @@ func main() {
 		bfFile.PrintOffsetArray()
 	case "print-info":
 		bfFile.PrintInfo()
-	}
-}
-
-func ProcessCommandline(args []string) {
-	for i := range args {
-		switch args[i] {
-		case "--print-offset-array":
-			mode = "print-offset"
-		case "--print-info":
-			mode = "print-info"
-		default:
-			if(args[i][0:2] != "--") {
-				if bfPath == "" {
-					bfPath = args[i]
-				} else {
-					extractPath = args[i]
-				}
-			}
-		}
 	}
 }
 
